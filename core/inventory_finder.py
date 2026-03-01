@@ -10,7 +10,7 @@ MAP_H = 434
 REGION = (MAP_X, MAP_Y, MAP_X + MAP_W, MAP_Y + MAP_H)  # left, top, right, bottom
 # konumlar sabit, bu yüzden ekranın neresinde olursa olsun aynı bölgeyi taranacak
 
-TEMPLATE_PATH = r"metin2\item_template.png"
+TEMPLATE_PATH = r"item_template.png"
 
 tmpl = cv2.imread(TEMPLATE_PATH, cv2.IMREAD_GRAYSCALE)
 if tmpl is None:

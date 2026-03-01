@@ -17,7 +17,7 @@ REGION = (MAP_X, MAP_Y, MAP_X + MAP_W, MAP_Y + MAP_H)  # left, top, right, botto
 # MAP_W GENİŞLİK, MAP_H YÜKSEKLİK
 # DXCAM REGION FORMATI (LEFT, TOP, RIGHT, BOTTOM) OLDUĞU İÇİN MAP_X + MAP_W VE MAP_Y + MAP_H KULLANILIR
 
-TEMPLATE_PATH = r"metin2\item_template.png"  # RESMİN OLDUĞU YER
+TEMPLATE_PATH = r"item_template.png"  # RESMİN OLDUĞU YER
 tmpl = cv2.imread(TEMPLATE_PATH, cv2.IMREAD_GRAYSCALE)
 # RESMİ GRİ TONLARINA ÇEVİRMEK İÇİN
 # Template matching griyle daha hızlı ve stabil olur (çoğu durumda).
