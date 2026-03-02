@@ -11,7 +11,7 @@ from difflib import SequenceMatcher
 from pyautogui import moveTo, click  # fare click hareket i çin
 from time import sleep
 
-from capture_service import grab_gray  # ✅ DXCam artık burada değil, servis modülünde
+from core.capture_service import grab_gray  # ✅ DXCam artık burada değil, servis modülünde
 
 
 def sim(a, b):
