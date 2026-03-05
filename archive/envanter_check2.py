@@ -1,32 +1,128 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Optional, Tuple, Dict
+
 import cv2
-import numpy  # cv2 ve numpy temel görüntü işleme ve matris işlemleri için
-import dxcam  # DirectX ekran yakalama, OpenCV ile birlikte kullanmak için) kütüphaneyi yaznan kişi baya sağlam şekilde yazmış obs den fazlasıyla esinlenilmiş
-from paddle import th_dll_path
-import pyautogui
+import numpy as np
 
-""" PROJE TEMEL AMACI YAPILACAK ŞEYLERİ EN OPTİMİZE HALE GETİRMEK, BU YÜZDEN KÜTÜPHAELER ÖNEMLİ BİR NOKTA, PYAUTOGUI BAZEN HIZLI HAREKETLERDE TAKILABİLİR, BU DURUMDA PYWIN32 GİBİ DAHA DÜŞÜK SEVİYE KÜTÜPHANELER DENENEBİLİR"""
+from core.capture_service import grab_gray  # shared dxcam gray service
 
-MAP_X = 950
-MAP_Y = 409
-MAP_W = 242
-MAP_H = 434
-REGION = (MAP_X, MAP_Y, MAP_X + MAP_W, MAP_Y + MAP_H)  # left, top, right, bottom
+Region = Tuple[int, int, int, int]  # (x1, y1, x2, y2)
 
-# konumlar sabit, bu yüzden ekranın neresinde olursa olsun aynı bölgeyi taranacak
-# MAP_X VE MAP_Y TARANACAK BÖLGENİN EN SOL PİKSELİ
-# MAP_W GENİŞLİK, MAP_H YÜKSEKLİK
-# DXCAM REGION FORMATI (LEFT, TOP, RIGHT, BOTTOM) OLDUĞU İÇİN MAP_X + MAP_W VE MAP_Y + MAP_H KULLANILIR
+# (template_path, scale) -> (tmpl_full, tmpl_small, th, tw)
+_TEMPLATE_CACHE: dict[tuple[str, float], tuple[np.ndarray, np.ndarray, int, int]] = {}
 
-TEMPLATE_PATH = r"item_template.png"  # RESMİN OLDUĞU YER
-tmpl = cv2.imread(TEMPLATE_PATH, cv2.IMREAD_GRAYSCALE)
-# RESMİ GRİ TONLARINA ÇEVİRMEK İÇİN
-# Template matching griyle daha hızlı ve stabil olur (çoğu durumda).
 
-if tmpl is None:
-    raise RuntimeError("Template okunamadı: item_template.png")
+def _resolve_template_path(template_name: str, templates_dir: str | None) -> str:
+    """
+    template_name: "x.png" gibi
+    templates_dir: None ise proje kökü /assets altı varsayılır
+    """
+    p = Path(template_name)
+    if p.is_absolute():
+        return str(p)
 
-th, tw = tmpl.shape[:2]  # RESMİN YÜKSEKLİĞİ VE GENİŞLİĞİ
+    if templates_dir is None:
+        # archive/ altındayız -> 1 üst: proje kökü
+        base = Path(__file__).resolve().parents[1] / "assets"
+    else:
+        base = Path(templates_dir)
 
-# coarse to fine ayarları (hız için) önce küçükte bul, sonra büyüğünde netleştir
+    return str((base / template_name).resolve())
 
-scale = 0.5
+
+def _load_template(template_path: str, scale: float) -> tuple[np.ndarray, np.ndarray, int, int]:
+    key = (template_path, float(scale))
+    if key in _TEMPLATE_CACHE:
+        return _TEMPLATE_CACHE[key]
+
+    tmpl = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
+    if tmpl is None:
+        raise RuntimeError(f"Template okunamadı: {template_path}")
+
+    th, tw = tmpl.shape[:2]
+    tmpl_small = cv2.resize(tmpl, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+
+    _TEMPLATE_CACHE[key] = (tmpl, tmpl_small, th, tw)
+    return tmpl, tmpl_small, th, tw
+
+
+def find_template_center_once(
+    region: Region,
+    template_name: str,
+    templates_dir: str | None = None,   # assets altını otomatik kullanır
+    scale: float = 0.5,
+    pad: int = 60,
+    thr_coarse: float = 0.65,
+    thr_fine: float = 0.80,
+) -> Optional[Tuple[int, int]]:
+    """
+    1 kere dener:
+      - Bulursa: (cx_screen, cy_screen)
+      - Bulamazsa: None
+
+    template_name: "x.png" gibi (assets altında aranır) veya tam path
+    """
+    template_path = _resolve_template_path(template_name, templates_dir)
+    tmpl, tmpl_small, th, tw = _load_template(template_path, scale)
+
+    frame = grab_gray(region=region)
+    if frame is None:
+        return None
+
+    # dxcam bazen (H,W,1) dönebilir
+    if frame.ndim == 3 and frame.shape[2] == 1:
+        frame = frame[:, :, 0]
+
+    frame = np.ascontiguousarray(frame)
+    H, W = frame.shape[:2]
+    if H < th or W < tw:
+        return None
+
+    method = cv2.TM_CCOEFF_NORMED
+
+    # 1) coarse (small)
+    small = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    res_s = cv2.matchTemplate(small, tmpl_small, method)
+    _, maxVal_s, _, maxLoc_s = cv2.minMaxLoc(res_s)
+    if maxVal_s < thr_coarse:
+        return None
+
+    # 2) approx -> refine window
+    approx_x = int(maxLoc_s[0] / scale)
+    approx_y = int(maxLoc_s[1] / scale)
+
+    x0 = max(approx_x - pad, 0)
+    y0 = max(approx_y - pad, 0)
+    x1 = min(approx_x + pad + tw, W)
+    y1 = min(approx_y + pad + th, H)
+
+    search = frame[y0:y1, x0:x1]
+    if search.shape[0] < th or search.shape[1] < tw:
+        return None
+
+    res = cv2.matchTemplate(search, tmpl, method)
+    _, maxVal, _, maxLoc = cv2.minMaxLoc(res)
+    if maxVal < thr_fine:
+        return None
+
+    # ROI içi sol-üst
+    x_roi = x0 + maxLoc[0]
+    y_roi = y0 + maxLoc[1]
+
+    # ROI -> screen
+    rx1, ry1, _, _ = region
+    x_screen = rx1 + x_roi
+    y_screen = ry1 + y_roi
+
+    cx_screen = x_screen + tw // 2
+    cy_screen = y_screen + th // 2
+    return (cx_screen, cy_screen)
+
+
+if __name__ == "__main__":
+    # hızlı test (kendi region ve template ile)
+    # örnek:
+    REGION = (15, 50, 15 + 1193, 50 + 892)
+    print(find_template_center_once(REGION, "x.png"))

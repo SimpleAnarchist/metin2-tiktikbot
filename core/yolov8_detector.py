@@ -419,3 +419,31 @@ def detect_yolov8_center(
         bigger_imgsz=bigger_imgsz,
         force_rgb=force_rgb,
     )
+
+def shutdown_yolov8():
+    """
+    YOLO'yu 'kapatmak' için:
+    - singleton modeli sıfırlar (bir sonraki çağrıda yeniden yükler)
+    - MSS objesini kapatır
+    - debug pencerelerini kapatır
+    - CUDA cache temizler (varsa)
+    """
+    global _detector_singleton, _mss_obj, _debug_viewer
+
+    _detector_singleton = None
+    _debug_viewer = None
+
+    close_debug_windows()
+
+    try:
+        if _mss_obj is not None:
+            _mss_obj.close()
+    except Exception:
+        pass
+    _mss_obj = None
+
+    try:
+        if torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
