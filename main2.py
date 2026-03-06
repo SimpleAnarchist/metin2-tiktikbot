@@ -7,6 +7,7 @@ import click
 import cv2
 import numpy as np
 import pyautogui
+from rsa import cli
 
 from core.capture_service import grab_gray
 from core.quest_ocr import get_location_from_points
@@ -131,7 +132,22 @@ def get_simyaci_center_retry_mss(
 
 
 def karakterdegis():
-    pass
+    click_center((1186, 918)) # ESC
+    sleep(0.1)
+    click_center((625, 532)) # karakter değiştirme butonu
+    sleep(3)
+    INV_TEMPLATE_PATH = r"assets\giris.png"
+    while True:
+        inv_pt = find_inventory_center_once(region=INV_REGION, template_path=INV_TEMPLATE_PATH)
+        if inv_pt is not None:
+            print("Giriş ekranı bulundu, tıklanıyor...")
+            click_center(inv_pt)
+            break
+        else:
+            print("Giriş ekranı bulunamadı, tekrar denenecek... (10 saniye sonra)")
+            sleep(3)
+
+
 # ========= MAIN LOOP =========
 def main():
     pyautogui.PAUSE = 0.1
