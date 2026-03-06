@@ -1,3 +1,5 @@
+# PROJE TAMAMEN WINDOWS ÜZERİNDE ÇALIŞACAK ŞEKİLDE AYARLANDI
+
 from __future__ import annotations
 
 from time import sleep
@@ -15,6 +17,14 @@ from core.quest_ocr import get_location_from_points
 # YOLO (MSS + renkli) — capture_service kullanmaz
 from core.yolov8_detector import detect_yolov8_center, close_debug_windows, shutdown_yolov8
 
+a = int(input("Kaç tane id ile giriş yapacaksınız? (1-9999): "))
+if a is not int:
+    print("Geçersiz giriş, sayı giriniz.")
+    exit(1)
+
+
+a = max(1, min(a, 9999))  # 1 ile 9999 arasında sınırla github önerdi ama hiçbir mantığı yok ama hoşuma gitti  böyle bir fonksiyonun olması
+print(f"{a} id ile giriş yapacaksınız.")
 
 # ========= CONFIG =========
 MODEL_PATH = r"assets\best.pt"
@@ -130,29 +140,33 @@ def get_simyaci_center_retry_mss(
         sleep(delay_s)
     return None
 
+def ask_int(msg: str) -> int:
+    while True:
+        s = input(msg).strip()
+        try:
+            return int(s)
+        except ValueError:
+            print("Sayı girmen lazım (örn: 0, 1, 2 ...)")
 
-def karakterdegis():
+def karakterdegis(sayac2,toplamsayi2):
     click_center((1186, 918)) # ESC
     sleep(0.1)
     click_center((625, 532)) # karakter değiştirme butonu
-    sleep(3)
-    INV_TEMPLATE_PATH = r"assets\giris.png"
-    while True:
-        inv_pt = find_inventory_center_once(region=INV_REGION, template_path=INV_TEMPLATE_PATH)
-        if inv_pt is not None:
-            print("Giriş ekranı bulundu, tıklanıyor...")
-            click_center(inv_pt)
-            break
-        else:
-            print("Giriş ekranı bulunamadı, tekrar denenecek... (10 saniye sonra)")
-            sleep(3)
+    if toplamsayi2 == sayac2:
+        print("Tüm karakterler denendi, program sonlandırılıyor.")
+        exit(0)
+    else:
+        return sayac2 + 1
+    
 
 
 # ========= MAIN LOOP =========
 def main():
+    toplamsayi = ask_int("Kaç id ile giriş yapacaksınız? (1-9999): ")
+    sayac = 0
     pyautogui.PAUSE = 0.1
-
     while True:
+        sayac =+ 1
         INV_TEMPLATE_PATH = r"assets\giris.png"
         while True:
             inv_pt = find_inventory_center_once(region=INV_REGION, template_path=INV_TEMPLATE_PATH)
@@ -203,7 +217,7 @@ def main():
                 click_center(inv_pt)
             else:
                 print("envanterde silah bulunamadı. diğer karaktere geçiliyor")
-                karakterdegis() # karakter değiş attığında karakter değiş fonksiyonu çalışacak ve daha sonrasında while başa dönecek
+                karakterdegis(sayac,toplamsayi) # karakter değiş attığında karakter değiş fonksiyonu çalışacak ve daha sonrasında while başa dönecek
                 break 
 
             # 3) YOLO (MSS) -> biraz dene, bulursa söyle (istersen tıkla), bulamazsa else boş
