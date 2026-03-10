@@ -17,14 +17,17 @@ from core.quest_ocr import get_location_from_points
 # YOLO (MSS + renkli) — capture_service kullanmaz
 from core.yolov8_detector import detect_yolov8_center, close_debug_windows, shutdown_yolov8
 
-a = int(input("Kaç tane id ile giriş yapacaksınız? (1-9999): "))
-if a is not int:
-    print("Geçersiz giriş, sayı giriniz.")
+a = input("Kaç tane id ile giriş yapacaksınız? (1-9999): ")
+
+try:
+    a = int(a)
+    print(f"Giriş yapmak istediğiniz id sayısı: {a}")
+except ValueError:
+    print("Geçersiz giriş! Lütfen bir sayı girin.")
     exit(1)
 
 
 a = max(1, min(a, 9999))  # 1 ile 9999 arasında sınırla github önerdi ama hiçbir mantığı yok ama hoşuma gitti  böyle bir fonksiyonun olması
-print(f"{a} id ile giriş yapacaksınız.")
 
 # ========= CONFIG =========
 MODEL_PATH = r"assets\best.pt"
@@ -233,7 +236,8 @@ def main():
 
             sleep(0.25)
         else:
-            pass
+            print("görev bulunamadı. diğer karaktere geçiliyor")
+            continue # görev bulunamazsa diğer karaktere geçmek için while başa döner
 
         # ---- buraya kendi işlemlerini eklersin ----
 
